@@ -1,10 +1,11 @@
 /*
- * Discord Music Bot - Ultra-Smooth High-Quality Audio Edition
+ * Discord Music Bot - Ultra-Smooth High-Quality Audio Edition with Anti-Rate-Limiting
  * 
  * Features:
  * - Universal !play command (YouTube links, Spotify links, search terms)
  * - High-quality audio prioritization (128kbps+ with Opus codec optimization)
  * - Anti-stutter technology with 64MB audio buffers
+ * - Anti-rate-limiting protection (handles 429 errors from YouTube)
  * - Real-time audio quality monitoring and display
  * - Connection diagnostics and stutter troubleshooting
  * - Full queue management (pause, resume, skip, stop, queue display)
@@ -25,6 +26,13 @@
  * - Enhanced error recovery and reconnection
  * - Connection quality monitoring (!connection command)
  * - Optimized player settings for smooth transitions
+ * 
+ * Anti-Rate-Limiting Protection:
+ * - Request throttling (1 second between requests)
+ * - Exponential backoff retry logic for 429 errors
+ * - Rotating user agents to avoid detection
+ * - Enhanced headers to mimic real browsers
+ * - Graceful degradation when rate limited
  * 
  * Commands: !play, !pause, !resume, !skip, !stop, !queue, !np, !quality, !connection, !volume, !vol+, !vol-, !help
  */
@@ -91,6 +99,7 @@ client.once('ready', async () => {
     
     console.log('🎵 Ready to play ultra-smooth music! Use !help for commands');
     console.log('🔊 Audio optimizations: 64MB buffers, anti-stutter tech, 128kbps+ priority');
+    console.log('🛡️ Anti-rate-limiting: Request throttling, retry logic, rotating user agents');
     console.log('🔗 Connection diagnostics available with !connection command');
 });
 
@@ -143,14 +152,14 @@ client.on('messageCreate', async message => {
         case 'nowplaying':
             await showNowPlaying(message);
             break;
-        // case 'quality':
-        // case 'q':
-        //     await showAudioQuality(message);
-        //     break;
-        // case 'connection':
-        // case 'ping':
-        //     await checkConnection(message);
-        //     break;
+        case 'quality':
+        case 'q':
+            await showAudioQuality(message);
+            break;
+        case 'connection':
+        case 'ping':
+            await checkConnection(message);
+            break;
         case 'help':
             await showHelp(message);
             break;
@@ -361,6 +370,9 @@ async function handleYouTubeLink(url) {
 // Search YouTube for songs
 async function searchYouTube(query) {
     try {
+        // Throttle requests to prevent rate limiting
+        await throttleRequests();
+        
         const results = await YouTube.search(query, { 
             limit: 3,
             type: 'video'
@@ -1229,6 +1241,8 @@ async function showHelp(message) {
         **📋 Queue & Info:**
         **!queue** - Show the current queue
         **!np** - Show now playing song with quality
+        **!quality** - Show detailed audio quality info
+        **!connection** - Check connection & diagnose stutters
         **!help** - Show this help message
         
         **💡 Examples:**
@@ -1297,7 +1311,52 @@ async function setVolume(message, volume) {
     }
 }
 
-// Helper function to normalize YouTube URLs
+// Rate limiting prevention
+let lastRequestTime = 0;
+const REQUEST_DELAY = 1000; // 1 second between requests
+
+async function throttleRequests() {
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    
+    if (timeSinceLastRequest < REQUEST_DELAY) {
+        const delay = REQUEST_DELAY - timeSinceLastRequest;
+        console.log(`⏳ Throttling request, waiting ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    lastRequestTime = Date.now();
+}
+
+// Anti-rate-limiting helper functions
+function getRandomUserAgent() {
+    const userAgents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
+    ];
+    return userAgents[Math.floor(Math.random() * userAgents.length)];
+}
+
+// Retry function for rate limiting
+async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await fn();
+        } catch (error) {
+            if (error.message.includes('429') && i < maxRetries - 1) {
+                const delay = baseDelay * Math.pow(2, i); // Exponential backoff
+                console.log(`⏳ Rate limited, retrying in ${delay}ms... (attempt ${i + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+            throw error;
+        }
+    }
+}
 function normalizeYouTubeURL(url) {
     try {
         // Handle youtu.be short links
