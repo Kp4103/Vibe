@@ -103,102 +103,72 @@ client.once('ready', async () => {
     console.log('🔗 Connection diagnostics available with !connection command');
 });
 
-// Command cooldown system to prevent spam
-const commandCooldowns = new Map();
-const COMMAND_COOLDOWN = 2000; // 2 seconds between commands per user
-
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
-    if (!message.content.startsWith('!')) return;
     
     const args = message.content.slice(1).split(' ');
     const command = args[0].toLowerCase();
     
-    // Command cooldown check
-    const userId = message.author.id;
-    const now = Date.now();
-    const cooldownKey = `${userId}-${command}`;
+    // Only respond to commands that start with !
+    if (!message.content.startsWith('!')) return;
     
-    if (commandCooldowns.has(cooldownKey)) {
-        const expirationTime = commandCooldowns.get(cooldownKey) + COMMAND_COOLDOWN;
-        if (now < expirationTime) {
-            const timeLeft = (expirationTime - now) / 1000;
-            return; // Silently ignore spam commands
-        }
-    }
-    
-    commandCooldowns.set(cooldownKey, now);
-    
-    // Clean up old cooldowns every minute
-    if (Math.random() < 0.01) { // 1% chance to cleanup
-        const expired = [];
-        for (const [key, time] of commandCooldowns) {
-            if (now - time > 60000) expired.push(key);
-        }
-        expired.forEach(key => commandCooldowns.delete(key));
-    }
-    
-    try {
-        switch (command) {
-            case 'play':
-            case 'p':
-                await handlePlay(message, args);
-                break;
-            case 'pause':
-                await handlePause(message);
-                break;
-            case 'resume':
-                await handleResume(message);
-                break;
-            case 'skip':
-                await handleSkip(message);
-                break;
-            case 'stop':
-                await handleStop(message);
-                break;
-            case 'queue':
-                await showQueue(message);
-                break;
-            case 'volume':
-            case 'vol':
-                await setVolume(message, args[1]);
-                break;
-            case 'volume+':
-            case 'vol+':
-            case 'volumeup':
-            case 'volup':
-                await adjustVolume(message, 10);
-                break;
-            case 'volume-':
-            case 'vol-':
-            case 'volumedown':
-            case 'voldown':
-                await adjustVolume(message, -10);
-                break;
-            case 'np':
-            case 'nowplaying':
-                await showNowPlaying(message);
-                break;
-            case 'quality':
-            case 'q':
-                await showAudioQuality(message);
-                break;
-            case 'connection':
-            case 'ping':
-                await checkConnection(message);
-                break;
-            case 'help':
-                await showHelp(message);
-                break;
-        }
-    } catch (error) {
-        console.error('Command error:', error);
-        // Don't spam error messages to users
+    switch (command) {
+        case 'play':
+        case 'p':
+            await handlePlay(message, args);
+            break;
+        case 'pause':
+            await handlePause(message);
+            break;
+        case 'resume':
+            await handleResume(message);
+            break;
+        case 'skip':
+            await handleSkip(message);
+            break;
+        case 'stop':
+            await handleStop(message);
+            break;
+        case 'queue':
+            await showQueue(message);
+            break;
+        case 'volume':
+        case 'vol':
+            await setVolume(message, args[1]);
+            break;
+        case 'volume+':
+        case 'vol+':
+        case 'volumeup':
+        case 'volup':
+            await adjustVolume(message, 10);
+            break;
+        case 'volume-':
+        case 'vol-':
+        case 'volumedown':
+        case 'voldown':
+            await adjustVolume(message, -10);
+            break;
+        case 'np':
+        case 'nowplaying':
+            await showNowPlaying(message);
+            break;
+        case 'quality':
+        case 'q':
+            await showAudioQuality(message);
+            break;
+        case 'connection':
+        case 'ping':
+            await checkConnection(message);
+            break;
+        case 'help':
+            await showHelp(message);
+            break;
     }
 });
 
 // Handle play command - Universal smart command that handles everything
-// Search-first approach to avoid 429 errors on free hosting
+// Works with: YouTube links, Spotify links, search terms
+// Automatically detects input type and uses the best method for each
 async function handlePlay(message, args) {
     const voiceChannel = message.member.voice.channel;
     if (!voiceChannel) {
@@ -214,42 +184,28 @@ async function handlePlay(message, args) {
     try {
         let songInfo;
         
-        // For free hosting: Convert ALL inputs to search queries to avoid 429 errors
+        // Smart detection: Check input type and use appropriate handler
         if (query.includes('spotify.com/track/')) {
-            console.log('🎵 Converting Spotify link to search');
+            console.log('🎵 Detected Spotify link');
             songInfo = await handleSpotifyTrack(query);
         } 
         else if (query.includes('youtube.com/watch') || query.includes('youtu.be/')) {
-            console.log('🎵 Converting YouTube link to search query');
-            // Extract video title instead of using direct link to avoid 429
-            try {
-                const normalizedUrl = normalizeYouTubeURL(query);
-                await throttleRequests();
-                
-                // Try to get basic info for the title, then search
-                const basicInfo = await ytdl.getBasicInfo(normalizedUrl);
-                const title = basicInfo.videoDetails.title;
-                const author = basicInfo.videoDetails.author.name;
-                
-                console.log(`🔍 Searching for: ${title} by ${author}`);
-                songInfo = await searchYouTube(`${title} ${author}`);
-            } catch (linkError) {
-                console.log('❌ Direct link failed, extracting from URL');
-                // Fallback: try to extract meaningful search terms from URL
-                const urlParams = new URL(query).searchParams;
-                const videoId = urlParams.get('v') || query.split('/').pop().split('?')[0];
-                console.log(`🔍 Searching by video ID: ${videoId}`);
-                songInfo = await searchYouTube(videoId);
+            console.log('🎵 Detected YouTube link');
+            const normalizedUrl = normalizeYouTubeURL(query);
+            if (ytdl.validateURL(normalizedUrl)) {
+                songInfo = await handleYouTubeLink(query);
+            } else {
+                return message.reply('❌ Invalid YouTube URL!');
             }
         }
         else {
-            // Direct search (most reliable on free hosting)
-            console.log('🎵 Direct search for:', query);
+            // Default to search (most reliable for plain text)
+            console.log('🎵 Searching for:', query);
             songInfo = await searchYouTube(query);
         }
         
         if (!songInfo) {
-            return message.reply('❌ Could not find that song! Try a different search term.');
+            return message.reply('❌ Could not find that song!');
         }
         
         // Add to queue and start playing
@@ -274,8 +230,8 @@ async function handlePlay(message, args) {
         }
         
     } catch (error) {
-        console.error('❌ Play command error:', error.message);
-        message.reply('❌ Something went wrong! Try a simpler search term or try again in a few seconds.');
+        console.error('❌ Play command error:', error);
+        message.reply('❌ Something went wrong while trying to play that song!');
     }
 }
 
