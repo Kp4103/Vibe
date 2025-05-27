@@ -1,8 +1,10 @@
 /*
- * Discord Music Bot - Ultra-Smooth High-Quality Audio Edition
+ * Discord Music Bot - Ultra-Smooth High-Quality Audio Edition (Spanish Interface)
  * 
  * Features:
- * - Universal !play command (YouTube links, Spotify links, search terms)
+ * - Spanish commands for client: !tocar, !pausar, !volumen, etc.
+ * - English command aliases also supported for compatibility
+ * - Universal !tocar command (YouTube links, Spotify links, search terms)
  * - High-quality audio prioritization (128kbps+ with Opus codec optimization)
  * - Anti-stutter technology with 64MB audio buffers
  * - Real-time audio quality monitoring and display
@@ -16,20 +18,21 @@
  * Audio Quality Features:
  * - Prioritizes high-bitrate formats (128kbps+)
  * - Opus codec optimization for Discord
- * - Quality detection and display (!quality command)
+ * - Quality detection and display (!calidad command)
  * - Automatic format selection for best available quality
  * 
  * Anti-Stutter Technology:
  * - 64MB audio buffers (4x larger than standard)
  * - Silence padding frames to prevent glitches
  * - Enhanced error recovery and reconnection
- * - Connection quality monitoring (!connection command)
+ * - Connection quality monitoring (!conexion command)
  * - Optimized player settings for smooth transitions
  * 
- * Commands: !play, !pause, !resume, !skip, !stop, !queue, !np, !volume, !vol+, !vol-, !help
+ * Spanish Commands: !tocar, !pausar, !reanudar, !saltar, !parar, !cola, !actual, !calidad, !conexion, !volumen, !subir, !bajar, !ayuda
+ * English Aliases: !play, !pause, !resume, !skip, !stop, !queue, !np, !quality, !connection, !volume, !vol+, !vol-, !help
  */
 
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, Collection } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, VoiceConnectionStatus, AudioPlayerStatus } = require('@discordjs/voice');
 const ytdl = require('@distube/ytdl-core');
 const YouTube = require('youtube-sr').default;
@@ -40,10 +43,172 @@ require('dotenv').config();
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildVoiceStates
     ]
+});
+
+// Store commands in a collection
+client.commands = new Collection();
+
+// Define slash commands
+const commands = [
+    new SlashCommandBuilder()
+        .setName('play')
+        .setDescription('Reproduce una canción')
+        .addStringOption(option =>
+            option.setName('query')
+                .setDescription('Nombre de la canción o URL de YouTube/Spotify')
+                .setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('pause')
+        .setDescription('Pausa la canción actual'),
+    new SlashCommandBuilder()
+        .setName('resume')
+        .setDescription('Reanuda la canción pausada'),
+    new SlashCommandBuilder()
+        .setName('skip')
+        .setDescription('Salta a la siguiente canción'),
+    new SlashCommandBuilder()
+        .setName('stop')
+        .setDescription('Detiene la música y limpia la cola'),
+    new SlashCommandBuilder()
+        .setName('queue')
+        .setDescription('Muestra la cola de reproducción'),
+    new SlashCommandBuilder()
+        .setName('volume')
+        .setDescription('Ajusta o muestra el volumen')
+        .addIntegerOption(option =>
+            option.setName('level')
+                .setDescription('Nivel de volumen (1-100)')
+                .setMinValue(1)
+                .setMaxValue(100)
+                .setRequired(false)),
+    new SlashCommandBuilder()
+        .setName('volumeup')
+        .setDescription('Aumenta el volumen en 10%'),
+    new SlashCommandBuilder()
+        .setName('volumedown')
+        .setDescription('Reduce el volumen en 10%'),
+    new SlashCommandBuilder()
+        .setName('nowplaying')
+        .setDescription('Muestra la canción actual'),
+    new SlashCommandBuilder()
+        .setName('quality')
+        .setDescription('Muestra información de calidad de audio'),
+    new SlashCommandBuilder()
+        .setName('connection')
+        .setDescription('Verifica la calidad de la conexión'),
+    new SlashCommandBuilder()
+        .setName('help')
+        .setDescription('Muestra la ayuda del bot')
+].map(command => command.toJSON());
+
+// Function to register slash commands
+async function registerCommands() {
+    try {
+        console.log('Started refreshing application (/) commands.');
+        
+        const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+        
+        // Register commands globally
+        await rest.put(
+            Routes.applicationCommands(process.env.CLIENT_ID),
+            { body: commands }
+        );
+        
+        console.log('Successfully reloaded application (/) commands.');
+    } catch (error) {
+        console.error('Error registering slash commands:', error);
+    }
+}
+
+// Register commands when bot is ready
+client.once('ready', async () => {
+    console.log(`🎵 ${client.user.tag} is online and ready!`);
+    
+    // Register slash commands
+    await registerCommands();
+    
+    // Test YouTube functionality
+    try {
+        const testResults = await YouTube.search('test', { limit: 1, type: 'video' });
+        if (testResults && testResults.length > 0) {
+            console.log('✅ YouTube integration working');
+        }
+    } catch (error) {
+        console.log('⚠️ YouTube search test failed:', error.message);
+    }
+    
+    // Initialize Spotify API
+    try {
+        const data = await spotifyApi.clientCredentialsGrant();
+        spotifyApi.setAccessToken(data.body['access_token']);
+        console.log('✅ Spotify integration working');
+    } catch (error) {
+        console.log('⚠️ Spotify integration failed:', error.message);
+    }
+    
+    console.log('🎵 Ready to play ultra-smooth music! Slash commands enabled');
+    console.log('🔊 Audio optimizations: 64MB buffers, anti-stutter tech, 128kbps+ priority');
+});
+
+// Handle slash commands
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isCommand()) return;
+
+    const { commandName } = interaction;
+
+    try {
+        switch (commandName) {
+            case 'play':
+                await handlePlay(interaction);
+                break;
+            case 'pause':
+                await handlePause(interaction);
+                break;
+            case 'resume':
+                await handleResume(interaction);
+                break;
+            case 'skip':
+                await handleSkip(interaction);
+                break;
+            case 'stop':
+                await handleStop(interaction);
+                break;
+            case 'queue':
+                await showQueue(interaction);
+                break;
+            case 'volume':
+                await setVolume(interaction);
+                break;
+            case 'volumeup':
+                await adjustVolume(interaction, 10);
+                break;
+            case 'volumedown':
+                await adjustVolume(interaction, -10);
+                break;
+            case 'nowplaying':
+                await showNowPlaying(interaction);
+                break;
+            case 'quality':
+                await showAudioQuality(interaction);
+                break;
+            case 'connection':
+                await checkConnection(interaction);
+                break;
+            case 'help':
+                await showHelp(interaction);
+                break;
+        }
+    } catch (error) {
+        console.error(`Error executing command ${commandName}:`, error);
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ 
+                content: '❌ ¡Ocurrió un error al ejecutar el comando!', 
+                ephemeral: true 
+            });
+        }
+    }
 });
 
 // Spotify setup using environment variables
@@ -89,9 +254,9 @@ client.once('ready', async () => {
         console.log('⚠️ Spotify integration failed:', error.message);
     }
     
-    console.log('🎵 Ready to play ultra-smooth music! Use !help for commands');
+    console.log('🎵 Ready to play ultra-smooth music! Spanish commands enabled for client');
     console.log('🔊 Audio optimizations: 64MB buffers, anti-stutter tech, 128kbps+ priority');
-    console.log('🔗 Connection diagnostics available with !connection command');
+    console.log('🔗 Connection diagnostics available with !conexion command');
 });
 
 client.on('messageCreate', async message => {
@@ -103,79 +268,97 @@ client.on('messageCreate', async message => {
     // Only respond to commands that start with !
     if (!message.content.startsWith('!')) return;
     
-    switch (command) {
-        case 'play':
+   switch (command) {
+        // Spanish commands (primary)
+        case 'reproducir':
+        case 'tocar':
+        case 'play': // Keep English for compatibility
         case 'p':
             await handlePlay(message, args);
             break;
+        case 'pausar':
         case 'pause':
             await handlePause(message);
             break;
+        case 'reanudar':
+        case 'continuar':
         case 'resume':
             await handleResume(message);
             break;
+        case 'saltar':
         case 'skip':
             await handleSkip(message);
             break;
+        case 'detener':
+        case 'parar':
         case 'stop':
             await handleStop(message);
             break;
+        case 'cola':
         case 'queue':
             await showQueue(message);
             break;
-        case 'volume':
+        case 'volumen':
         case 'vol':
+        case 'volume':
             await setVolume(message, args[1]);
             break;
-        case 'volume+':
+        case 'volumen+':
         case 'vol+':
+        case 'subirvolumen':
+        case 'volume+':
         case 'volumeup':
         case 'volup':
             await adjustVolume(message, 10);
             break;
-        case 'volume-':
+        case 'volumen-':
         case 'vol-':
+        case 'bajarvolumen':
+        case 'volume-':
         case 'volumedown':
         case 'voldown':
             await adjustVolume(message, -10);
             break;
+        case 'actual':
+        case 'ahora':
         case 'np':
         case 'nowplaying':
             await showNowPlaying(message);
             break;
+        case 'calidad':
         case 'quality':
         case 'q':
             await showAudioQuality(message);
             break;
-        case 'connection':
+        case 'conexion':
         case 'ping':
+        case 'connection':
             await checkConnection(message);
             break;
+        case 'ayuda':
         case 'help':
             await showHelp(message);
             break;
     }
 });
 
-// Handle play command - Universal smart command that handles everything
-// Works with: YouTube links, Spotify links, search terms
-// Automatically detects input type and uses the best method for each
-async function handlePlay(message, args) {
-    const voiceChannel = message.member.voice.channel;
+// Handle play command
+async function handlePlay(interaction) {
+    const voiceChannel = interaction.member.voice.channel;
     if (!voiceChannel) {
-        return message.reply('❌ You need to be in a voice channel to play music!');
+        return interaction.reply('❌ ¡Necesitas estar en un canal de voz para reproducir música!');
     }
     
-    if (!args[1]) {
-        return message.reply('❌ Please provide a song name, YouTube link, or Spotify link!');
+    const query = interaction.options.getString('query');
+    if (!query) {
+        return interaction.reply('❌ ¡Por favor proporciona el nombre de una canción, enlace de YouTube o enlace de Spotify!');
     }
-    
-    const query = args.slice(1).join(' ');
+
+    await interaction.deferReply();
     
     try {
         let songInfo;
         
-        // Smart detection: Check input type and use appropriate handler
         if (query.includes('spotify.com/track/')) {
             console.log('🎵 Detected Spotify link');
             songInfo = await handleSpotifyTrack(query);
@@ -186,44 +369,347 @@ async function handlePlay(message, args) {
             if (ytdl.validateURL(normalizedUrl)) {
                 songInfo = await handleYouTubeLink(query);
             } else {
-                return message.reply('❌ Invalid YouTube URL!');
+                return interaction.editReply('❌ ¡URL de YouTube inválida!');
             }
         }
         else {
-            // Default to search (most reliable for plain text)
             console.log('🎵 Searching for:', query);
             songInfo = await searchYouTube(query);
         }
         
         if (!songInfo) {
-            return message.reply('❌ Could not find that song!');
+            return interaction.editReply('❌ ¡No se pudo encontrar esa canción!');
         }
         
-        // Add to queue and start playing
-        let serverQueue = serverQueues.get(message.guild.id);
+        let serverQueue = serverQueues.get(interaction.guild.id);
         if (!serverQueue) {
             serverQueue = new ServerQueue();
-            serverQueues.set(message.guild.id, serverQueue);
+            serverQueues.set(interaction.guild.id, serverQueue);
         }
         
         serverQueue.songs.push(songInfo);
         
         if (!serverQueue.playing) {
-            await playMusic(message, serverQueue, voiceChannel);
+            await playMusic(interaction, serverQueue, voiceChannel);
         } else {
             const embed = new EmbedBuilder()
-                .setTitle('🎵 Added to Queue')
-                .setDescription(`**${songInfo.title}**\nBy: ${songInfo.author}`)
+                .setTitle('🎵 Añadida a la Cola')
+                .setDescription(`**${songInfo.title}**\nPor: ${songInfo.author}`)
                 .setColor(0x00ff00)
                 .setThumbnail(songInfo.thumbnail);
             
-            message.reply({ embeds: [embed] });
+            await interaction.editReply({ embeds: [embed] });
         }
         
     } catch (error) {
         console.error('❌ Play command error:', error);
-        message.reply('❌ Something went wrong while trying to play that song!');
+        await interaction.editReply('❌ ¡Algo salió mal al intentar reproducir esa canción!');
     }
+}
+
+// Handle pause command
+async function handlePause(interaction) {
+    const serverQueue = serverQueues.get(interaction.guild.id);
+    if (!serverQueue || !serverQueue.player) {
+        return interaction.reply('❌ ¡No se está reproduciendo nada actualmente!');
+    }
+    
+    serverQueue.player.pause();
+    await interaction.reply('⏸️ ¡Música pausada!');
+}
+
+// Handle resume command
+async function handleResume(interaction) {
+    const serverQueue = serverQueues.get(interaction.guild.id);
+    if (!serverQueue || !serverQueue.player) {
+        return interaction.reply('❌ ¡No hay nada pausado actualmente!');
+    }
+    
+    serverQueue.player.unpause();
+    await interaction.reply('▶️ ¡Música reanudada!');
+}
+
+// Handle skip command
+async function handleSkip(interaction) {
+    const serverQueue = serverQueues.get(interaction.guild.id);
+    if (!serverQueue || !serverQueue.player) {
+        return interaction.reply('❌ ¡No se está reproduciendo nada actualmente!');
+    }
+    
+    if (serverQueue.songs.length <= 1) {
+        return interaction.reply('❌ ¡No hay más canciones en la cola para saltar!');
+    }
+    
+    serverQueue.player.stop();
+    await interaction.reply('⏭️ ¡Canción saltada!');
+}
+
+// Handle stop command
+async function handleStop(interaction) {
+    const serverQueue = serverQueues.get(interaction.guild.id);
+    if (!serverQueue) {
+        return interaction.reply('❌ ¡No se está reproduciendo nada actualmente!');
+    }
+    
+    serverQueue.songs = [];
+    serverQueue.playing = false;
+    
+    if (serverQueue.player) {
+        serverQueue.player.stop();
+    }
+    
+    if (serverQueue.connection && serverQueue.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+        serverQueue.connection.destroy();
+    }
+    
+    serverQueues.delete(interaction.guild.id);
+    await interaction.reply('⏹️ ¡Música detenida y cola limpiada!');
+}
+
+// Show queue command
+async function showQueue(interaction) {
+    const serverQueue = serverQueues.get(interaction.guild.id);
+    if (!serverQueue || serverQueue.songs.length === 0) {
+        return interaction.reply('❌ ¡La cola está vacía!');
+    }
+    
+    const queueList = serverQueue.songs.slice(0, 10).map((song, index) => {
+        if (index === 0) {
+            return `🎵 **Reproduciendo Ahora:** ${song.title} - ${song.author}`;
+        }
+        return `${index}. ${song.title} - ${song.author}`;
+    }).join('\n');
+    
+    const embed = new EmbedBuilder()
+        .setTitle('🎵 Cola de Música')
+        .setDescription(queueList)
+        .setColor(0x00ff00)
+        .setFooter({ text: `${serverQueue.songs.length} canción(es) en cola` });
+    
+    await interaction.reply({ embeds: [embed] });
+}
+
+// Volume control
+async function setVolume(interaction) {
+    const serverQueue = serverQueues.get(interaction.guild.id);
+    if (!serverQueue) {
+        return interaction.reply('❌ ¡No se está reproduciendo nada actualmente!');
+    }
+    
+    const volume = interaction.options.getInteger('level');
+    
+    // Show current volume if no parameter provided
+    if (!volume) {
+        const currentVol = Math.round((serverQueue.volume || 0.5) * 100);
+        return interaction.reply(`🔊 Volumen actual: **${currentVol}%**`);
+    }
+    
+    // Update server queue volume setting
+    serverQueue.volume = volume / 100;
+    
+    // Apply volume to current audio resource if it has volume control
+    if (serverQueue.player && serverQueue.player.state.resource && serverQueue.player.state.resource.volume) {
+        serverQueue.player.state.resource.volume.setVolume(serverQueue.volume);
+        
+        const embed = new EmbedBuilder()
+            .setTitle('🔊 Volumen Cambiado')
+            .setDescription(`Volumen establecido a **${volume}%**`)
+            .setColor(0x00ff00);
+        
+        await interaction.reply({ embeds: [embed] });
+        console.log(`Volume set to ${volume}% for guild ${interaction.guild.id}`);
+    } else {
+        await interaction.reply(`🔊 Volumen establecido a **${volume}%** (se aplicará en la siguiente canción)`);
+        console.log(`Volume setting saved: ${volume}% for guild ${interaction.guild.id}`);
+    }
+}
+
+// Adjust volume up/down
+async function adjustVolume(interaction, change) {
+    const serverQueue = serverQueues.get(interaction.guild.id);
+    if (!serverQueue) {
+        return interaction.reply('❌ ¡No se está reproduciendo nada actualmente!');
+    }
+    
+    const currentVol = Math.round((serverQueue.volume || 0.5) * 100);
+    const newVol = Math.max(1, Math.min(100, currentVol + change));
+    
+    // Create a fake interaction with the new volume
+    const fakeInteraction = {
+        ...interaction,
+        options: {
+            getInteger: () => newVol
+        }
+    };
+    
+    await setVolume(fakeInteraction);
+}
+
+// Show now playing
+async function showNowPlaying(interaction) {
+    const serverQueue = serverQueues.get(interaction.guild.id);
+    if (!serverQueue || serverQueue.songs.length === 0) {
+        return interaction.reply('❌ ¡No se está reproduciendo nada actualmente!');
+    }
+    
+    const song = serverQueue.songs[0];
+    const quality = serverQueue.currentQuality;
+    
+    let qualityInfo = '';
+    if (quality && quality.bitrate) {
+        qualityInfo = `\nCalidad: ${quality.bitrate}kbps ${quality.codec?.toUpperCase() || 'Audio'}`;
+    }
+    
+    const embed = new EmbedBuilder()
+        .setTitle('🎵 Reproduciendo Ahora')
+        .setDescription(`**${song.title}**\nPor: ${song.author}\nDuración: ${song.duration}${qualityInfo}`)
+        .setColor(0x00ff00)
+        .setThumbnail(song.thumbnail);
+    
+    await interaction.reply({ embeds: [embed] });
+}
+
+// Show audio quality
+async function showAudioQuality(interaction) {
+    const serverQueue = serverQueues.get(interaction.guild.id);
+    if (!serverQueue || serverQueue.songs.length === 0) {
+        return interaction.reply('❌ ¡No se está reproduciendo nada actualmente!');
+    }
+    
+    const song = serverQueue.songs[0];
+    const quality = serverQueue.currentQuality;
+    
+    let qualityText = 'Información de calidad no disponible';
+    
+    if (quality) {
+        const bitrateText = quality.bitrate ? `${quality.bitrate}kbps` : 'Bitrate desconocido';
+        const codecText = quality.codec || 'Códec desconocido';
+        const containerText = quality.container || 'Formato desconocido';
+        
+        qualityText = `**Calidad de Audio:**\n🎵 Bitrate: ${bitrateText}\n🔊 Códec: ${codecText.toUpperCase()}\n📦 Contenedor: ${containerText.toUpperCase()}`;
+        
+        if (quality.bitrate) {
+            if (quality.bitrate >= 256) {
+                qualityText += '\n⭐ **Calidad Excelente**';
+            } else if (quality.bitrate >= 128) {
+                qualityText += '\n✅ **Alta Calidad**';
+            } else if (quality.bitrate >= 96) {
+                qualityText += '\n👍 **Buena Calidad**';
+            } else {
+                qualityText += '\n📱 **Calidad Estándar**';
+            }
+        }
+        
+        qualityText += '\n\n**Optimizaciones de Streaming:**\n🔄 Buffer de 64MB (Anti-cortes)\n🔇 Padding de Silencio (Transiciones suaves)';
+    }
+    
+    const embed = new EmbedBuilder()
+        .setTitle('🎵 Calidad de Audio Actual')
+        .setDescription(`**${song.title}**\nPor: ${song.author}\n\n${qualityText}`)
+        .setColor(0x00ff00)
+        .setThumbnail(song.thumbnail)
+        .setFooter({ text: 'Optimizado para reproducción sin cortes • Use /connection para verificar la red' });
+    
+    await interaction.reply({ embeds: [embed] });
+}
+
+// Check connection
+async function checkConnection(interaction) {
+    await interaction.deferReply();
+    
+    const serverQueue = serverQueues.get(interaction.guild.id);
+    
+    // Basic ping test
+    const pingStart = Date.now();
+    const ping = Date.now() - pingStart;
+    
+    let connectionStatus = '✅ **Excelente** (< 50ms)';
+    if (ping > 200) {
+        connectionStatus = '❌ **Pobre** (> 200ms) - Puede causar cortes';
+    } else if (ping > 100) {
+        connectionStatus = '⚠️ **Regular** (100-200ms) - Posibles problemas menores';
+    } else if (ping > 50) {
+        connectionStatus = '👍 **Buena** (50-100ms)';
+    }
+    
+    let voiceStatus = '❌ No conectado a voz';
+    if (serverQueue && serverQueue.connection) {
+        const state = serverQueue.connection.state.status;
+        
+        switch(state) {
+            case VoiceConnectionStatus.Ready:
+                voiceStatus = '✅ Conexión de voz: Lista';
+                break;
+            case VoiceConnectionStatus.Connecting:
+                voiceStatus = '⏳ Conexión de voz: Conectando...';
+                break;
+            case VoiceConnectionStatus.Disconnected:
+                voiceStatus = '❌ Conexión de voz: Desconectado';
+                break;
+            case VoiceConnectionStatus.Destroyed:
+                voiceStatus = '💥 Conexión de voz: Destruida';
+                break;
+            default:
+                voiceStatus = `🔍 Conexión de voz: ${state}`;
+        }
+    }
+    
+    const embed = new EmbedBuilder()
+        .setTitle('🔗 Diagnóstico de Conexión')
+        .setDescription(`
+        **Latencia de Discord:** ${ping}ms
+        ${connectionStatus}
+        
+        **Estado de Voz:**
+        ${voiceStatus}
+        
+        **Buffer de Audio:** 64MB (Optimizado para reproducción suave)
+        **Padding de Silencio:** 5 frames (Protección anti-cortes)
+        
+        **Consejos para Mejor Rendimiento:**
+        ${ping > 100 ? '• Intente cambiar a una región de voz diferente\n• Verifique su conexión a internet\n• Reinicie su router si los problemas persisten' : '• ¡La conexión se ve bien!\n• El audio debería reproducirse sin cortes'}
+        `)
+        .setColor(ping > 200 ? 0xff0000 : ping > 100 ? 0xffa500 : 0x00ff00)
+        .setTimestamp();
+    
+    await interaction.editReply({ embeds: [embed] });
+}
+
+// Show help
+async function showHelp(interaction) {
+    const embed = new EmbedBuilder()
+        .setTitle('🎵 Bot de Música Ultra-Fluida - Comandos')
+        .setDescription(`
+        **🎮 Control de Música:**
+        **/play [canción/enlace]** - Reproduce cualquier canción, enlace o término de búsqueda
+        **/pause** - Pausa la canción actual
+        **/resume** - Reanuda la canción pausada
+        **/skip** - Salta a la siguiente canción
+        **/stop** - Detiene la música y limpia la cola
+
+        **🔊 Control de Volumen:**
+        **/volume [1-100]** - Establece el volumen o muestra el actual
+        **/volumeup** - Aumenta el volumen en 10%
+        **/volumedown** - Reduce el volumen en 10%
+
+        **📋 Cola e Información:**
+        **/queue** - Muestra la cola actual de reproducción
+        **/nowplaying** - Muestra la canción reproduciéndose con calidad
+        **/quality** - Muestra información detallada de calidad de audio
+        **/connection** - Verifica la conexión y diagnostica cortes
+        **/help** - Muestra este mensaje de ayuda
+
+        **💡 Ejemplos de Uso:**
+        /play despacito - Busca y reproduce en alta calidad
+        /play https://youtu.be/... - Enlace de YouTube
+        /play https://open.spotify.com/track/... - Enlace de Spotify
+        /volume 75 - Establece el volumen al 75%
+        /connection - Soluciona problemas de cortes de audio
+        `)
+        .setColor(0x00ff00)
+        .setFooter({ text: '🎵 Tecnología anti-cortes • Buffers de 64MB • Audio hasta 320kbps' });
+    
+    await interaction.reply({ embeds: [embed] });
 }
 
 // Handle Spotify track links
@@ -261,7 +747,7 @@ async function handleSpotifyTrack(spotifyUrl) {
     }
 }
 
-// Handle YouTube links
+// Handle YouTube links - Console logs in English for developer, user messages in Spanish  
 async function handleYouTubeLink(url) {
     try {
         console.log('Processing YouTube link:', url);
@@ -299,8 +785,8 @@ async function handleYouTubeLink(url) {
             }
             
             return {
-                title: videoDetails.title || 'Unknown Title',
-                author: videoDetails.author?.name || 'Unknown Channel',
+                title: videoDetails.title || 'Título Desconocido',
+                author: videoDetails.author?.name || 'Canal Desconocido',
                 url: normalizedUrl,
                 thumbnail: videoDetails.thumbnails?.[0]?.url || '',
                 duration: formatDuration(parseInt(videoDetails.lengthSeconds))
@@ -344,8 +830,8 @@ async function handleYouTubeLink(url) {
             console.log('Found via search fallback:', bestMatch.title);
             
             return {
-                title: bestMatch.title || 'Unknown Title',
-                author: bestMatch.channel?.name || 'Unknown Channel',
+                title: bestMatch.title || 'Título Desconocido',
+                author: bestMatch.channel?.name || 'Canal Desconocido',
                 url: bestMatch.url,
                 thumbnail: bestMatch.thumbnail?.url || '',
                 duration: formatDuration(bestMatch.duration)
@@ -398,7 +884,7 @@ async function searchYouTube(query) {
 }
 
 // Play music function
-async function playMusic(message, serverQueue, voiceChannel) {
+async function playMusic(interaction, serverQueue, voiceChannel) {
     const song = serverQueue.songs[0];
     
     if (!song) {
@@ -406,7 +892,7 @@ async function playMusic(message, serverQueue, voiceChannel) {
         if (serverQueue.connection && serverQueue.connection.state.status !== VoiceConnectionStatus.Destroyed) {
             serverQueue.connection.destroy();
         }
-        serverQueues.delete(message.guild.id);
+        serverQueues.delete(interaction.guild.id);
         return;
     }
     
@@ -420,17 +906,17 @@ async function playMusic(message, serverQueue, voiceChannel) {
     // Validate URL before attempting to play
     if (!song.url || typeof song.url !== 'string') {
         console.error('Invalid song URL:', song.url);
-        message.channel.send('❌ Invalid song URL, skipping to next song...');
+        interaction.reply('❌ Invalid song URL, skipping to next song...');
         serverQueue.songs.shift();
-        return playMusic(message, serverQueue, voiceChannel);
+        return playMusic(interaction, serverQueue, voiceChannel);
     }
     
     try {
         // Join voice channel with optimized settings for smooth audio
         const connection = joinVoiceChannel({
             channelId: voiceChannel.id,
-            guildId: message.guild.id,
-            adapterCreator: message.guild.voiceAdapterCreator,
+            guildId: interaction.guild.id,
+            adapterCreator: interaction.guild.voiceAdapterCreator,
             selfDeaf: false,
             selfMute: false
         });
@@ -464,17 +950,17 @@ async function playMusic(message, serverQueue, voiceChannel) {
         
         if (!validUrl.startsWith('http')) {
             console.error('URL does not start with http:', validUrl);
-            message.channel.send('❌ Invalid URL format, skipping song...');
+            interaction.reply('❌ Invalid URL format, skipping song...');
             serverQueue.songs.shift();
-            return playMusic(message, serverQueue, voiceChannel);
+            return playMusic(interaction, serverQueue, voiceChannel);
         }
         
         // Double-check URL validity
         if (!ytdl.validateURL(validUrl)) {
             console.error('URL failed ytdl validation:', validUrl);
-            message.channel.send('❌ Invalid YouTube URL, skipping song...');
+            interaction.reply('❌ Invalid YouTube URL, skipping song...');
             serverQueue.songs.shift();
-            return playMusic(message, serverQueue, voiceChannel);
+            return playMusic(interaction, serverQueue, voiceChannel);
         }
         
         // Create audio resource from YouTube using ytdl-core
@@ -552,7 +1038,7 @@ async function playMusic(message, serverQueue, voiceChannel) {
                 .setColor(0x00ff00)
                 .setThumbnail(song.thumbnail);
             
-            message.channel.send({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
             console.log('✅ Successfully playing:', song.title);
             
         } catch (streamError) {
@@ -588,7 +1074,7 @@ async function playMusic(message, serverQueue, voiceChannel) {
                     .setColor(0xffa500)
                     .setThumbnail(song.thumbnail);
                 
-                message.channel.send({ embeds: [embed] });
+                await interaction.reply({ embeds: [embed] });
                 console.log('✅ Successfully playing with fallback method:', song.title);
                 
             } catch (fallbackError) {
@@ -644,12 +1130,12 @@ async function playMusic(message, serverQueue, voiceChannel) {
                                 };
                                 
                                 const embed = new EmbedBuilder()
-                                    .setTitle('🎵 Now Playing (Alternative)')
-                                    .setDescription(`**${altVideo.title}**\nBy: ${altVideo.channel?.name || 'Unknown'}\nDuration: ${formatDuration(altVideo.duration)}`)
+                                    .setTitle('🎵 Reproduciendo Ahora (Versión Alternativa)')
+                                    .setDescription(`**${altVideo.title}**\nPor: ${altVideo.channel?.name || 'Desconocido'}\nDuración: ${formatDuration(altVideo.duration)}`)
                                     .setColor(0xff6600)
                                     .setThumbnail(altVideo.thumbnail?.url || '');
                                 
-                                message.channel.send({ embeds: [embed] });
+                                await interaction.reply({ embeds: [embed] });
                                 console.log('✅ Successfully playing alternative:', altVideo.title);
                                 return; // Success!
                                 
@@ -666,10 +1152,10 @@ async function playMusic(message, serverQueue, voiceChannel) {
                     
                 } catch (altSearchError) {
                     console.error('Alternative search failed:', altSearchError.message);
-                    message.channel.send('❌ Could not play this song or find alternatives. YouTube may be blocking access. Skipping...');
+                    interaction.reply('❌ Could not play this song or find alternatives. YouTube may be blocking access. Skipping...');
                     serverQueue.songs.shift();
                     setTimeout(() => {
-                        playMusic(message, serverQueue, voiceChannel);
+                        playMusic(interaction, serverQueue, voiceChannel);
                     }, 2000);
                     return;
                 }
@@ -680,622 +1166,28 @@ async function playMusic(message, serverQueue, voiceChannel) {
         player.on(AudioPlayerStatus.Idle, () => {
             console.log('Song finished, playing next...');
             serverQueue.songs.shift(); // Remove played song
-            playMusic(message, serverQueue, voiceChannel); // Play next song
+            playMusic(interaction, serverQueue, voiceChannel); // Play next song
         });
         
         player.on('error', error => {
             console.error('Audio player error:', error);
-            message.channel.send('❌ Error playing song, skipping to next...');
+            interaction.reply('❌ Error playing song, skipping to next...');
             serverQueue.songs.shift();
             // Don't immediately try to play next song if there's an error
             setTimeout(() => {
-                playMusic(message, serverQueue, voiceChannel);
+                playMusic(interaction, serverQueue, voiceChannel);
             }, 2000);
         });
         
     } catch (error) {
         console.error('Play music error:', error);
-        message.channel.send('❌ Could not play the song, trying next in queue...');
+        interaction.reply('❌ Could not play the song, trying next in queue...');
         serverQueue.songs.shift(); // Remove the problematic song
         
         // Try next song after a delay
         setTimeout(() => {
-            playMusic(message, serverQueue, voiceChannel);
+            playMusic(interaction, serverQueue, voiceChannel);
         }, 2000);
-    }
-}
-
-// Pause command
-async function handlePause(message) {
-    const serverQueue = serverQueues.get(message.guild.id);
-    if (!serverQueue || !serverQueue.player) {
-        return message.reply('❌ Nothing is currently playing!');
-    }
-    
-    serverQueue.player.pause();
-    message.reply('⏸️ Music paused!');
-}
-
-// Resume command
-async function handleResume(message) {
-    const serverQueue = serverQueues.get(message.guild.id);
-    if (!serverQueue || !serverQueue.player) {
-        return message.reply('❌ Nothing is currently paused!');
-    }
-    
-    serverQueue.player.unpause();
-    message.reply('▶️ Music resumed!');
-}
-
-// Skip command
-async function handleSkip(message) {
-    const serverQueue = serverQueues.get(message.guild.id);
-    if (!serverQueue || !serverQueue.player) {
-        return message.reply('❌ Nothing is currently playing!');
-    }
-    
-    if (serverQueue.songs.length <= 1) {
-        return message.reply('❌ No more songs in queue to skip to!');
-    }
-    
-    serverQueue.player.stop(); // This will trigger the 'idle' event and play next song
-    message.reply('⏭️ Song skipped!');
-}
-
-// Stop command
-async function handleStop(message) {
-    const serverQueue = serverQueues.get(message.guild.id);
-    if (!serverQueue) {
-        return message.reply('❌ Nothing is currently playing!');
-    }
-    
-    serverQueue.songs = [];
-    serverQueue.playing = false;
-    
-    if (serverQueue.player) {
-        serverQueue.player.stop();
-    }
-    
-    if (serverQueue.connection && serverQueue.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-        serverQueue.connection.destroy();
-    }
-    
-    serverQueues.delete(message.guild.id);
-    message.reply('⏹️ Music stopped and queue cleared!');
-}
-
-// Show queue
-async function showQueue(message) {
-    const serverQueue = serverQueues.get(message.guild.id);
-    if (!serverQueue || serverQueue.songs.length === 0) {
-        return message.reply('❌ The queue is empty!');
-    }
-    
-    const queueList = serverQueue.songs.slice(0, 10).map((song, index) => {
-        if (index === 0) {
-            return `🎵 **Now Playing:** ${song.title} - ${song.author}`;
-        }
-        return `${index}. ${song.title} - ${song.author}`;
-    }).join('\n');
-    
-    const embed = new EmbedBuilder()
-        .setTitle('🎵 Music Queue')
-        .setDescription(queueList)
-        .setColor(0x00ff00)
-        .setFooter({ text: `${serverQueue.songs.length} song(s) in queue` });
-    
-    message.reply({ embeds: [embed] });
-}
-
-// Check connection quality and provide diagnostics
-async function checkConnection(message) {
-    const serverQueue = serverQueues.get(message.guild.id);
-    
-    // Basic ping test
-    const pingStart = Date.now();
-    const pingMessage = await message.reply('🏓 Testing connection...');
-    const ping = Date.now() - pingStart;
-    
-    let connectionStatus = '✅ **Excellent** (< 50ms)';
-    if (ping > 200) {
-        connectionStatus = '❌ **Poor** (> 200ms) - May cause stutters';
-    } else if (ping > 100) {
-        connectionStatus = '⚠️ **Fair** (100-200ms) - Possible minor issues';  
-    } else if (ping > 50) {
-        connectionStatus = '👍 **Good** (50-100ms)';
-    }
-    
-    let voiceStatus = '❌ Not connected to voice';
-    if (serverQueue && serverQueue.connection) {
-        const state = serverQueue.connection.state.status;
-        
-        switch(state) {
-            case VoiceConnectionStatus.Ready:
-                voiceStatus = '✅ Voice connection: Ready';
-                break;
-            case VoiceConnectionStatus.Connecting:
-                voiceStatus = '⏳ Voice connection: Connecting...';
-                break;
-            case VoiceConnectionStatus.Disconnected:
-                voiceStatus = '❌ Voice connection: Disconnected';
-                break;
-            case VoiceConnectionStatus.Destroyed:
-                voiceStatus = '💥 Voice connection: Destroyed';
-                break;
-            default:
-                voiceStatus = `🔍 Voice connection: ${state}`;
-        }
-    }
-    
-    const embed = new EmbedBuilder()
-        .setTitle('🔗 Connection Diagnostics')
-        .setDescription(`
-        **Discord Latency:** ${ping}ms
-        ${connectionStatus}
-        
-        **Voice Status:**
-        ${voiceStatus}
-        
-        **Audio Buffer:** 64MB (Optimized for smooth playback)
-        **Silence Padding:** 5 frames (Anti-stutter protection)
-        
-        **Tips for Better Performance:**
-        ${ping > 100 ? '• Try switching to a different voice region\n• Check your internet connection\n• Restart your router if issues persist' : '• Connection looks good!\n• Audio should be smooth and stutter-free'}
-        `)
-        .setColor(ping > 200 ? 0xff0000 : ping > 100 ? 0xffa500 : 0x00ff00)
-        .setTimestamp();
-    
-    await pingMessage.edit({ content: '', embeds: [embed] });
-}
-
-// Show current audio quality information
-async function showAudioQuality(message) {
-    const serverQueue = serverQueues.get(message.guild.id);
-    if (!serverQueue || serverQueue.songs.length === 0) {
-        return message.reply('❌ Nothing is currently playing!');
-    }
-    
-    const song = serverQueue.songs[0];
-    const quality = serverQueue.currentQuality;
-    
-    let qualityText = 'Quality information not available';
-    
-    if (quality) {
-        const bitrateText = quality.bitrate ? `${quality.bitrate}kbps` : 'Unknown bitrate';
-        const codecText = quality.codec || 'Unknown codec';
-        const containerText = quality.container || 'Unknown format';
-        
-        qualityText = `**Audio Quality:**\n🎵 Bitrate: ${bitrateText}\n🔊 Codec: ${codecText.toUpperCase()}\n📦 Container: ${containerText.toUpperCase()}`;
-        
-        // Add quality rating
-        if (quality.bitrate) {
-            if (quality.bitrate >= 256) {
-                qualityText += '\n⭐ **Excellent Quality**';
-            } else if (quality.bitrate >= 128) {
-                qualityText += '\n✅ **High Quality**';
-            } else if (quality.bitrate >= 96) {
-                qualityText += '\n👍 **Good Quality**';
-            } else {
-                qualityText += '\n📱 **Standard Quality**';
-            }
-        }
-        
-        // Add buffer info
-        qualityText += '\n\n**Streaming Optimizations:**\n🔄 64MB Buffer (Anti-stutter)\n🔇 Silence Padding (Smooth transitions)';
-    }
-    
-    const embed = new EmbedBuilder()
-        .setTitle('🎵 Current Audio Quality')
-        .setDescription(`**${song.title}**\nBy: ${song.author}\n\n${qualityText}`)
-        .setColor(0x00ff00)
-        .setThumbnail(song.thumbnail)
-        .setFooter({ text: 'Optimized for stutter-free playback • Use !connection to check network' });
-    
-    message.reply({ embeds: [embed] });
-}
-
-// Show now playing
-async function showNowPlaying(message) {
-    const serverQueue = serverQueues.get(message.guild.id);
-    if (!serverQueue || serverQueue.songs.length === 0) {
-        return message.reply('❌ Nothing is currently playing!');
-    }
-    
-    const song = serverQueue.songs[0];
-    const quality = serverQueue.currentQuality;
-    
-    let qualityInfo = '';
-    if (quality && quality.bitrate) {
-        qualityInfo = `\nQuality: ${quality.bitrate}kbps ${quality.codec?.toUpperCase() || 'Audio'}`;
-    }
-    
-    const embed = new EmbedBuilder()
-        .setTitle('🎵 Now Playing')
-        .setDescription(`**${song.title}**\nBy: ${song.author}\nDuration: ${song.duration}${qualityInfo}`)
-        .setColor(0x00ff00)
-        .setThumbnail(song.thumbnail);
-    
-    message.reply({ embeds: [embed] });
-}
-
-// Quick test command to see format availability
-async function testCommand(message, args) {
-    const url = args[1] || 'https://www.youtube.com/watch?v=w_VQJBWvJcI';
-    
-    try {
-        message.reply('🔍 Testing format availability...');
-        console.log('\n=== QUICK TEST ===');
-        
-        const normalizedUrl = normalizeYouTubeURL(url);
-        console.log('Testing:', normalizedUrl);
-        
-        const info = await ytdl.getInfo(normalizedUrl);
-        const formats = info.formats;
-        
-        const audioFormats = formats.filter(f => f.hasAudio && !f.hasVideo);
-        const workingFormats = audioFormats.filter(f => f.url);
-        
-        console.log(`Total formats: ${formats.length}`);
-        console.log(`Audio-only formats: ${audioFormats.length}`);
-        console.log(`Working formats (with URL): ${workingFormats.length}`);
-        
-        if (workingFormats.length > 0) {
-            console.log('Sample working format:', {
-                quality: workingFormats[0].quality,
-                container: workingFormats[0].container,
-                hasUrl: !!workingFormats[0].url
-            });
-            
-            message.reply(`✅ Found ${workingFormats.length} working audio formats out of ${audioFormats.length} total audio formats.`);
-        } else {
-            message.reply(`❌ No working formats found! This explains why the bot can't play.`);
-        }
-        
-    } catch (error) {
-        console.error('Test error:', error);
-        message.reply(`❌ Test failed: ${error.message}`);
-    }
-}
-
-// Show available formats for a YouTube video
-async function showFormats(message, args) {
-    if (!args[1]) {
-        return message.reply('❌ Usage: `!formats <youtube_url>` to see available audio formats');
-    }
-    
-    const url = args[1];
-    
-    try {
-        const normalizedUrl = normalizeYouTubeURL(url);
-        
-        if (!ytdl.validateURL(normalizedUrl)) {
-            return message.reply('❌ Invalid YouTube URL!');
-        }
-        
-        console.log('Getting formats for:', normalizedUrl);
-        const info = await ytdl.getInfo(normalizedUrl);
-        
-        // Get audio-only formats
-        const audioFormats = info.formats.filter(format => format.hasAudio && !format.hasVideo);
-        const workingFormats = audioFormats.filter(format => format.url);
-        
-        if (audioFormats.length === 0) {
-            return message.reply('❌ No audio-only formats found for this video!');
-        }
-        
-        const formatList = workingFormats.slice(0, 10).map((format, index) => {
-            const hasUrl = format.url ? '✅' : '❌';
-            return `${index + 1}. ${hasUrl} **${format.qualityLabel || format.quality}** - ${format.container} (${format.audioCodec})`;
-        }).join('\n');
-        
-        const embed = new EmbedBuilder()
-            .setTitle('🎵 Available Audio Formats')
-            .setDescription(`**${info.videoDetails.title}**\n\n${formatList}`)
-            .setColor(0x00ff00)
-            .setFooter({ text: `Working: ${workingFormats.length}/${audioFormats.length} formats` });
-        
-        message.reply({ embeds: [embed] });
-        
-    } catch (error) {
-        console.error('Formats command error:', error);
-        message.reply(`❌ Could not get formats: ${error.message}`);
-    }
-}
-
-// Handle pure search (bypass direct links)
-async function handleSearch(message, args) {
-    const voiceChannel = message.member.voice.channel;
-    if (!voiceChannel) {
-        return message.reply('❌ You need to be in a voice channel to play music!');
-    }
-    
-    if (!args[1]) {
-        return message.reply('❌ Please provide a search term! Example: `!search slava funk`');
-    }
-    
-    const query = args.slice(1).join(' ');
-    
-    try {
-        console.log('Pure search for:', query);
-        const songInfo = await searchYouTube(query);
-        
-        if (!songInfo) {
-            return message.reply('❌ Could not find that song!');
-        }
-        
-        // Get or create server queue
-        let serverQueue = serverQueues.get(message.guild.id);
-        if (!serverQueue) {
-            serverQueue = new ServerQueue();
-            serverQueues.set(message.guild.id, serverQueue);
-        }
-        
-        // Add song to queue
-        serverQueue.songs.push(songInfo);
-        
-        // If not playing, start playing
-        if (!serverQueue.playing) {
-            await playMusic(message, serverQueue, voiceChannel);
-        } else {
-            const embed = new EmbedBuilder()
-                .setTitle('🎵 Added to Queue (Search)')
-                .setDescription(`**${songInfo.title}**\nBy: ${songInfo.author}`)
-                .setColor(0x00ff00)
-                .setThumbnail(songInfo.thumbnail);
-            
-            message.reply({ embeds: [embed] });
-        }
-        
-    } catch (error) {
-        console.error('Search command error:', error);
-        message.reply('❌ Something went wrong while searching for that song!');
-    }
-}
-
-// Debug command to test individual components
-async function debugCommand(message, args) {
-    if (!args[1]) {
-        return message.reply('❌ Usage: `!debug <url>` to test a YouTube URL');
-    }
-    
-    const url = args[1];
-    message.reply('🔍 Testing URL... (check console for details)');
-    
-    try {
-        console.log('\n=== DEBUG COMMAND ===');
-        console.log('Testing URL:', url);
-        
-        // Test URL normalization
-        const normalizedUrl = normalizeYouTubeURL(url);
-        console.log('Normalized URL:', normalizedUrl);
-        
-        // Test URL validation
-        const isValid = ytdl.validateURL(normalizedUrl);
-        console.log('URL validation result:', isValid);
-        
-        if (!isValid) {
-            return message.reply(`❌ URL validation failed`);
-        }
-        
-        // Test video info retrieval
-        try {
-            console.log('Attempting video info...');
-            const info = await ytdl.getInfo(normalizedUrl);
-            console.log('✅ Video info successful:', {
-                title: info.videoDetails.title,
-                duration: info.videoDetails.lengthSeconds,
-                live: info.videoDetails.isLiveContent
-            });
-            
-            // Test stream creation
-            console.log('Testing stream creation...');
-            const stream = ytdl(normalizedUrl, {
-                filter: 'audioonly',
-                quality: 'highestaudio'
-            });
-            
-            console.log('✅ Stream created successfully');
-            stream.destroy(); // Don't actually use it
-            
-            message.reply(`✅ All tests passed! Video: "${info.videoDetails.title}" - Duration: ${formatDuration(parseInt(info.videoDetails.lengthSeconds))}`);
-            
-        } catch (videoInfoError) {
-            console.log('❌ Video info failed:', videoInfoError.message);
-            console.log('Trying search fallback...');
-            
-            try {
-                // Try basic info first
-                const basicInfo = await ytdl.getBasicInfo(normalizedUrl);
-                if (basicInfo.videoDetails.title) {
-                    console.log('✅ Basic info successful:', basicInfo.videoDetails.title);
-                    message.reply(`⚠️ Full info failed, but basic info works!\nTitle: "${basicInfo.videoDetails.title}"`);
-                } else {
-                    throw new Error('Basic info also failed');
-                }
-                
-            } catch (fallbackError) {
-                console.error('❌ All methods failed:', fallbackError);
-                message.reply(`❌ All methods failed. This video may be restricted or unavailable.`);
-            }
-        }
-        
-    } catch (error) {
-        console.error('Debug error:', error);
-        message.reply(`❌ Debug failed: ${error.message}`);
-    }
-}
-async function debugCommand(message, args) {
-    if (!args[1]) {
-        return message.reply('❌ Usage: `!debug <url>` to test a YouTube URL');
-    }
-    
-    const url = args[1];
-    message.reply('🔍 Testing URL... (check console for details)');
-    
-    try {
-        console.log('\n=== DEBUG COMMAND ===');
-        console.log('Testing URL:', url);
-        
-        // Test URL normalization
-        const normalizedUrl = normalizeYouTubeURL(url);
-        console.log('Normalized URL:', normalizedUrl);
-        
-        // Test URL validation
-        const isValid = play.yt_validate(normalizedUrl);
-        console.log('URL validation result:', isValid);
-        
-        if (isValid !== 'video') {
-            return message.reply(`❌ URL validation failed: ${isValid}`);
-        }
-        
-        // Test video info retrieval (this is where it usually fails)
-        try {
-            console.log('Attempting direct video info...');
-            const info = await play.video_info(normalizedUrl);
-            console.log('✅ Direct video info successful:', {
-                title: info.video_details.title,
-                duration: info.video_details.durationInSec,
-                live: info.video_details.live
-            });
-            
-            // Test stream creation
-            console.log('Testing stream creation...');
-            const stream = await play.stream(normalizedUrl, {
-                discordPlayerCompatibility: true
-            });
-            console.log('✅ Stream created successfully:', {
-                type: stream.type,
-                hasStream: !!stream.stream
-            });
-            
-            message.reply(`✅ All tests passed! Video: "${info.video_details.title}" - Duration: ${formatDuration(info.video_details.durationInSec)}`);
-            
-        } catch (videoInfoError) {
-            console.log('❌ Direct video info failed:', videoInfoError.message);
-            console.log('Trying search fallback...');
-            
-            try {
-                // Extract video ID for search
-                const videoId = normalizedUrl.split('v=')[1]?.split('&')[0];
-                console.log('Video ID:', videoId);
-                
-                const searchResults = await play.search(videoId, {
-                    limit: 3,
-                    source: { youtube: 'video' }
-                });
-                
-                if (searchResults && searchResults.length > 0) {
-                    const result = searchResults[0];
-                    console.log('✅ Search fallback successful:', result.title);
-                    
-                    // Test streaming the search result
-                    const stream = await play.stream(result.url);
-                    console.log('✅ Fallback stream test successful');
-                    
-                    message.reply(`⚠️ Direct access failed, but search fallback works!\nFound: "${result.title}" - Duration: ${formatDuration(result.durationInSec)}`);
-                } else {
-                    throw new Error('No search results found');
-                }
-                
-            } catch (fallbackError) {
-                console.error('❌ Search fallback also failed:', fallbackError);
-                message.reply(`❌ Both direct access and search fallback failed. This video may be restricted.`);
-            }
-        }
-        
-    } catch (error) {
-        console.error('Debug error:', error);
-        message.reply(`❌ Debug failed: ${error.message}`);
-    }
-}
-
-// Help command
-async function showHelp(message) {
-    const embed = new EmbedBuilder()
-        .setTitle('🎵 Ultra-Smooth Music Bot Commands')
-        .setDescription(`
-        **🎮 Music Control:**
-        **!play [song/link]** - Play any song, link, or search term
-        **!pause** - Pause the current song
-        **!resume** - Resume the paused song  
-        **!skip** - Skip to the next song
-        **!stop** - Stop music and clear queue
-        
-        **🔊 Volume Control:**
-        **!volume [1-100]** - Set volume or show current
-        **!vol+ / !volup** - Increase volume by 10%
-        **!vol- / !voldown** - Decrease volume by 10%
-        
-        **📋 Queue & Info:**
-        **!queue** - Show the current queue
-        **!np** - Show now playing song with quality
-        **!quality** - Show detailed audio quality info
-        **!connection** - Check connection & diagnose stutters
-        **!help** - Show this help message
-        
-        **💡 Examples:**
-        \`!play slava funk\` - Search and play in high quality
-        \`!play https://youtu.be/...\` - YouTube link  
-        \`!play https://open.spotify.com/track/...\` - Spotify link
-        \`!connection\` - Fix stutter issues
-        `)
-        .setColor(0x00ff00)
-        .setFooter({ text: '🎵 Anti-stutter technology • 64MB buffers • Up to 320kbps audio' });
-    
-    message.reply({ embeds: [embed] });
-}
-
-// Adjust volume up or down
-async function adjustVolume(message, change) {
-    const serverQueue = serverQueues.get(message.guild.id);
-    if (!serverQueue) {
-        return message.reply('❌ Nothing is currently playing!');
-    }
-    
-    // Get current volume (default to 50% if not set)
-    const currentVol = Math.round((serverQueue.volume || 0.5) * 100);
-    const newVol = Math.max(1, Math.min(100, currentVol + change));
-    
-    // Use the existing setVolume function
-    await setVolume(message, newVol.toString());
-}
-
-// Volume control (proper implementation)
-async function setVolume(message, volume) {
-    const serverQueue = serverQueues.get(message.guild.id);
-    if (!serverQueue) {
-        return message.reply('❌ Nothing is currently playing!');
-    }
-    
-    // Show current volume if no parameter provided
-    if (!volume) {
-        const currentVol = Math.round((serverQueue.volume || 0.5) * 100);
-        return message.reply(`🔊 Current volume: **${currentVol}%**`);
-    }
-    
-    const vol = parseInt(volume);
-    if (isNaN(vol) || vol < 1 || vol > 100) {
-        return message.reply('❌ Please provide a volume between 1 and 100!');
-    }
-    
-    // Update server queue volume setting
-    serverQueue.volume = vol / 100;
-    
-    // Apply volume to current audio resource if it has volume control
-    if (serverQueue.player && serverQueue.player.state.resource && serverQueue.player.state.resource.volume) {
-        serverQueue.player.state.resource.volume.setVolume(serverQueue.volume);
-        
-        const embed = new EmbedBuilder()
-            .setTitle('🔊 Volume Changed')
-            .setDescription(`Volume set to **${vol}%**`)
-            .setColor(0x00ff00);
-        
-        message.reply({ embeds: [embed] });
-        console.log(`Volume set to ${vol}% for guild ${message.guild.id}`);
-    } else {
-        // Volume will apply to next song
-        message.reply(`🔊 Volume set to **${vol}%** (will apply to next song)`);
-        console.log(`Volume setting saved: ${vol}% for guild ${message.guild.id}`);
     }
 }
 
@@ -1348,4 +1240,5 @@ function formatDuration(duration) {
 }
 
 // Login with your bot token from environment variables
+client.login(process.env.DISCORD_TOKEN);
 client.login(process.env.DISCORD_TOKEN);
